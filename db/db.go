@@ -1,53 +1,32 @@
+// Ensure db package handles initialization and retrieval correctly
 package db
 
 import (
-    "fmt"
-    "log"
-    "os"
-
-    "github.com/joho/godotenv"
     "gorm.io/driver/mysql"
     "gorm.io/gorm"
-    "stock-back/models"
-    "stock-back/utils"
+    "log"
+    "os"
 )
 
-var DB *gorm.DB
+var (
+    db *gorm.DB
+)
 
+// Init initializes the database connection
 func Init() {
-    // Load environment variables
-    err := godotenv.Load(".env")
+    dsn := os.Getenv("DB_USER") + ":" + os.Getenv("DB_PASSWORD") + "@tcp(" + os.Getenv("DB_HOST") + ":3306)/" + os.Getenv("DB_NAME") + "?parseTime=true"
+
+    var err error
+    db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
     if err != nil {
-        log.Fatalf("Error loading .env file: %v", err)
+        log.Fatalf("Error connecting to database: %v", err)
     }
 
-    // MySQL connection string
-    dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-        os.Getenv("DB_USER"),
-        os.Getenv("DB_PASSWORD"),
-        os.Getenv("DB_HOST"),
-        os.Getenv("DB_PORT"),
-        os.Getenv("DB_NAME"),
-    )
-
-    // Connect to MySQL database
-    database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-    if err != nil {
-        log.Fatalf("Failed to connect to database: %v", err)
-    }
-
-    // Auto migration of models
-    err = database.AutoMigrate(&models.User{})
-    if err != nil {
-        log.Fatalf("Failed to migrate database: %v", err)
-    }
-
-    // Assign database connection to utils.DB
-    utils.DB = database
-
-    fmt.Println("Database connected and migrated")
+    // Enable debug mode if needed
+    // db.Debug().AutoMigrate(&models.User{}, &models.Role{}) // Example for auto migration
 }
 
+// GetDB returns the instance of *gorm.DB
 func GetDB() *gorm.DB {
-    return utils.DB
+    return db
 }

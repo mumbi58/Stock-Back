@@ -7,12 +7,13 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 	"stock-back/models"
 	"stock-back/utils"
 )
 
 // AuditorLogin handles auditor login
-func AuditorLogin(c echo.Context) error {
+func AuditorLogin(c echo.Context, db *gorm.DB) error {
 	var loginData struct {
 		Email    string `json:"email" validate:"required"`
 		Password string `json:"password" validate:"required"`
@@ -50,6 +51,6 @@ func AuditorLogin(c echo.Context) error {
 }
 
 // AuditorLogout handles auditor logout
-func AuditorLogout(c echo.Context) error {
+func AuditorLogout(c echo.Context, db *gorm.DB) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "Successfully logged out"})
 }
