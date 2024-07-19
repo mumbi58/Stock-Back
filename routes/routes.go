@@ -1,56 +1,42 @@
 package routes
 
 import (
-    "github.com/labstack/echo/v4"
-    "github.com/labstack/echo/v4/middleware"
     "stock-back/controllers"
     "stock-back/middlewares"
-    "gorm.io/gorm" // Import gorm package here
+    "github.com/labstack/echo/v4"
+    "gorm.io/gorm"
+    "stock-back/models"
 )
 
-// SetupRouter initializes all routes for the application
-func SetupRouter(e *echo.Echo, db *gorm.DB) {
-    // Middleware to inject db instance into context
+func SetupRoutes(e *echo.Echo, db *gorm.DB) {
+    // Middleware
     e.Use(middlewares.GetDBMiddleware(db))
+    e.Use(middlewares.JWTMiddleware)
 
-    // Public routes for login and logout
-    e.POST("/login", func(c echo.Context) error { return controllers.Login(c, db) })
-    e.POST("/logout", func(c echo.Context) error { return controllers.Logout(c, db) })
-    e.POST("/auditor/login", func(c echo.Context) error { return controllers.AuditorLogin(c, db) })
-    e.POST("/auditor/logout", func(c echo.Context) error { return controllers.AuditorLogout(c, db) })
-    e.POST("/admin/login", func(c echo.Context) error { return controllers.AdminLogin(c) })
-    e.POST("/admin/logout", func(c echo.Context) error { return controllers.AdminLogout(c) })
+    // Super Admin routes
+    e.POST("/superadmin/signup", controllers.SuperAdminSignup) // No middleware needed for signup
 
-    // Routes specific to super admin
-    superadmin := e.Group("/superadmin")
-    {
-        // Public routes for superadmin
-        superadmin.POST("/signup", controllers.SuperAdminSignup)
-        superadmin.POST("/login", controllers.SuperAdminLogin)
+    e.POST("/superadmin/addadmin", middlewares.SuperAdminOnly(controllers.AddAdmin))
+    e.POST("/superadmin/login", controllers.SuperAdminLogin)
+    e.POST("/superadmin/logout", controllers.SuperAdminLogout)
 
-        // Protected routes for superadmin
-        superadmin.Use(middleware.JWTWithConfig(middleware.JWTConfig{
-            SigningKey: []byte("secret"),
-        }))
-        superadmin.POST("/addadmin", controllers.AddAdmin)
-        superadmin.POST("/addorganization", controllers.SuperAdminAddOrganization)
-    }
+    // Admin routes
+    adminGroup := e.Group("/admin")
+    adminGroup.Use(middlewares.AuthMiddleware(models.AdminRoleID))
+    adminGroup.POST("/login", controllers.AdminLogin)
+    adminGroup.POST("/adduser", controllers.AdminAddUser)
+    adminGroup.GET("/user/:id", controllers.GetUserByID)
+    adminGroup.PUT("/user/:id", controllers.EditUser)
+    adminGroup.DELETE("/user/:id", controllers.SoftDeleteUser)
+    adminGroup.POST("/logout", controllers.AdminLogout)
 
-    // Routes specific to admin
-    admin := e.Group("/admin")
-    {
-        // Middleware to verify JWT token for admin routes and restrict to admins only
-        admin.Use(
-            middleware.JWTWithConfig(middleware.JWTConfig{
-                SigningKey: []byte("secret"),
-            }),
-            middlewares.AdminOnly,
-        )
+    // Shop Attendant routes
+    shopAttendantGroup := e.Group("/shopattendant")
+    shopAttendantGroup.POST("/login", controllers.Login)
+    shopAttendantGroup.POST("/logout", controllers.Logout)
 
-        admin.POST("/adduser", controllers.AdminAddUser)
-        admin.PUT("/users/:id", controllers.EditUser)
-        admin.DELETE("/users/:id", controllers.SoftDeleteUser)
-        admin.GET("/users/:id", controllers.AdminGetUserByID)
-        admin.GET("/users", controllers.AdminListUsers)
-    }
+    // Auditor routes
+    auditorGroup := e.Group("/auditor")
+    auditorGroup.POST("/login", controllers.AuditorLogin)
+    auditorGroup.POST("/logout", controllers.AuditorLogout)
 }
