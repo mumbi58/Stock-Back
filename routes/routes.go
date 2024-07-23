@@ -13,30 +13,30 @@ func SetupRoutes(e *echo.Echo, db *gorm.DB) {
     e.Use(middlewares.GetDBMiddleware(db))
     e.Use(middlewares.JWTMiddleware)
 
+    //public routes
+    e.POST("/superadmin/login", controllers.SuperAdminLogin)
+    e.POST("/superadmin/logout", controllers.SuperAdminLogout)
+    e.POST("/login", controllers.AdminLogin)
+    e.POST("/logout", controllers.AdminLogout)
+    e.POST("/login", controllers.Login)
+    e.POST("/logout", controllers.Logout)
+    e.POST("/login", controllers.AuditorLogin)
+    e.POST("/logout", controllers.AuditorLogout)
+
+
+
     // Super Admin routes
     e.POST("/superadmin/signup", controllers.SuperAdminSignup) // No middleware needed for signup
 
     e.POST("/superadmin/addadmin", middlewares.SuperAdminOnly(controllers.AddAdmin))
-    e.POST("/superadmin/login", controllers.SuperAdminLogin)
-    e.POST("/superadmin/logout", controllers.SuperAdminLogout)
-
+    
     // Admin routes
     adminGroup := e.Group("/admin")
     adminGroup.Use(middlewares.AuthMiddleware(models.AdminRoleID))
-    adminGroup.POST("/login", controllers.AdminLogin)
     adminGroup.POST("/adduser", controllers.AdminAddUser)
     adminGroup.GET("/user/:id", controllers.GetUserByID)
     adminGroup.PUT("/user/:id", controllers.EditUser)
     adminGroup.DELETE("/user/:id", controllers.SoftDeleteUser)
-    adminGroup.POST("/logout", controllers.AdminLogout)
 
-    // Shop Attendant routes
-    shopAttendantGroup := e.Group("/shopattendant")
-    shopAttendantGroup.POST("/login", controllers.Login)
-    shopAttendantGroup.POST("/logout", controllers.Logout)
-
-    // Auditor routes
-    auditorGroup := e.Group("/auditor")
-    auditorGroup.POST("/login", controllers.AuditorLogin)
-    auditorGroup.POST("/logout", controllers.AuditorLogout)
+    
 }

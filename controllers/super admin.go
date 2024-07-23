@@ -49,11 +49,13 @@ func SuperAdminSignup(c echo.Context) error {
 }
 
 func AddAdmin(c echo.Context) error {
-    user, ok := c.Get("user").(models.User)
-    if !ok {
-        return c.JSON(http.StatusInternalServerError, echo.Map{"error": "User not found in context"})
-    }
-    if user.RoleID != 1 { // Super Admin RoleID
+    userToken := c.Get("user").(*jwt.Token)
+    claims := userToken.Claims.(jwt.MapClaims)
+    roleID := int(claims["roleID"].(float64))
+
+    fmt.Printf("Received RoleID: %d\n", roleID)
+
+    if roleID != 1 { // Super Admin RoleID
         return c.JSON(http.StatusForbidden, echo.Map{"error": "Permission denied"})
     }
 
@@ -76,7 +78,6 @@ func AddAdmin(c echo.Context) error {
 
     return c.JSON(http.StatusOK, echo.Map{"message": "Admin added successfully", "admin": newAdmin})
 }
-
 func SuperAdminLogin(c echo.Context) error {
     var input struct {
         Email    string `json:"email" binding:"required"`

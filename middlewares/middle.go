@@ -47,8 +47,10 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
             return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token"})
         }
 
+        // Extract the user ID and role ID from the claims and set them in the context
         c.Set("userID", claims.UserID)
-        c.Set("roleID", claims.RoleID)
+        c.Set("roleID", int(claims.RoleID)) // Cast the RoleID to int
+
         return next(c)
     }
 }
@@ -57,7 +59,7 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 func AuthMiddleware(allowedRoles ...int) echo.MiddlewareFunc {
     return func(next echo.HandlerFunc) echo.HandlerFunc {
         return func(c echo.Context) error {
-            roleID, ok := c.Get("roleID").(int)  // Use int here to match expected roleID type
+            roleID, ok := c.Get("roleID").(int)
             if !ok {
                 return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Role ID not found in context"})
             }
@@ -84,7 +86,7 @@ func contains(slice []int, value int) bool {
 // SuperAdminOnly restricts access to super admins
 func SuperAdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
-        roleID, ok := c.Get("roleID").(int)  // Use int here to match expected roleID type
+        roleID, ok := c.Get("roleID").(int)
         if !ok || roleID != models.SuperAdminRoleID {
             return c.JSON(http.StatusForbidden, map[string]string{"error": "Access forbidden"})
         }
@@ -95,7 +97,7 @@ func SuperAdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
 // AdminOnly restricts access to admins
 func AdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
-        roleID, ok := c.Get("roleID").(int)  // Use int here to match expected roleID type
+        roleID, ok := c.Get("roleID").(int)
         if !ok || roleID != models.AdminRoleID {
             return c.JSON(http.StatusForbidden, map[string]string{"error": "Access forbidden"})
         }
@@ -106,7 +108,7 @@ func AdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
 // ShopAttendantOnly restricts access to shop attendants
 func ShopAttendantOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
-        roleID, ok := c.Get("roleID").(int)  // Use int here to match expected roleID type
+        roleID, ok := c.Get("roleID").(int)
         if !ok || roleID != models.ShopAttendantRoleID {
             return c.JSON(http.StatusForbidden, map[string]string{"error": "Access forbidden"})
         }
@@ -117,7 +119,7 @@ func ShopAttendantOnly(next echo.HandlerFunc) echo.HandlerFunc {
 // AuditorOnly restricts access to auditors
 func AuditorOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
-        roleID, ok := c.Get("roleID").(int)  // Use int here to match expected roleID type
+        roleID, ok := c.Get("roleID").(int)
         if !ok || roleID != models.AuditorRoleID {
             return c.JSON(http.StatusForbidden, map[string]string{"error": "Access forbidden"})
         }
