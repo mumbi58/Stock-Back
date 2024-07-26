@@ -14,7 +14,7 @@ func main() {
     e := echo.New()
 
     // Set up routes
-    routes.SetupRoutes(e, db.GetDB())
+    routes.SetupRoutes(e) // Only pass the Echo instance
 
     // Start the server
     e.Logger.Fatal(e.Start(":8080"))
