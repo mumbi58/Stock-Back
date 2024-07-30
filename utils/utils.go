@@ -6,6 +6,7 @@ import (
     "github.com/dgrijalva/jwt-go"
     "golang.org/x/crypto/bcrypt"
     "gorm.io/gorm"
+    "log"
 )
 
 var (
@@ -15,6 +16,7 @@ var (
 
 var ErrInvalidToken = errors.New("invalid token")
 
+// Claims represents the JWT claims
 type Claims struct {
     UserID uint `json:"user_id"`
     RoleID uint `json:"role_id"`
@@ -23,18 +25,27 @@ type Claims struct {
 
 // ParseToken parses and validates the JWT token
 func ParseToken(tokenString string) (*jwt.Token, error) {
-    token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-        // Make sure the token method conforms to your signing method
+    token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
         if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            log.Printf("Unexpected signing method: %v", token.Method)
             return nil, ErrInvalidToken
         }
         return JwtSecret, nil
     })
-    return token, err
+    if err != nil {
+        log.Printf("Error parsing token: %v", err)
+        return nil, err
+    }
+    if !token.Valid {
+        log.Printf("Token is not valid")
+        return nil, ErrInvalidToken
+    }
+    return token, nil
 }
 
-// GenerateJWT generates a JWT token
+// GenerateJWT generates a JWT token with userID and roleID
 func GenerateJWT(userID, roleID uint) (string, error) {
+    log.Printf("Generating JWT for userID: %d, roleID: %d", userID, roleID)
     expirationTime := time.Now().Add(24 * time.Hour)
     claims := &Claims{
         UserID: userID,
@@ -45,34 +56,54 @@ func GenerateJWT(userID, roleID uint) (string, error) {
     }
 
     token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-    return token.SignedString(JwtSecret)
+    signedToken, err := token.SignedString(JwtSecret)
+    if err != nil {
+        log.Printf("Error signing token: %v", err)
+        return "", err
+    }
+    return signedToken, nil
 }
 
-// VerifyJWT verifies the JWT token
+// VerifyJWT verifies the JWT token and returns the claims
 func VerifyJWT(tokenString string) (*Claims, error) {
     claims := &Claims{}
     token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+        if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+            log.Printf("Unexpected signing method: %v", token.Method)
+            return nil, ErrInvalidToken
+        }
         return JwtSecret, nil
     })
 
     if err != nil {
+        log.Printf("Error verifying token: %v", err)
         return nil, err
     }
 
     if !token.Valid {
+        log.Printf("Token is not valid")
         return nil, ErrInvalidToken
     }
 
+    log.Printf("Verified JWT with userID: %d, roleID: %d", claims.UserID, claims.RoleID)
     return claims, nil
 }
 
 // HashPassword hashes a password
 func HashPassword(password string) (string, error) {
-    bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
-    return string(bytes), err
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        log.Printf("Error hashing password: %v", err)
+        return "", err
+    }
+    return string(hashedPassword), nil
 }
 
 // CheckPasswordHash compares a password hash
 func CheckPasswordHash(password, hash string) error {
-    return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+    err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+    if err != nil {
+        log.Printf("Password hash mismatch: %v", err)
+    }
+    return err
 }

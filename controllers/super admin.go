@@ -52,12 +52,24 @@ func SuperAdminSignup(c echo.Context) error {
 }
 
 func AddAdmin(c echo.Context) error {
-    userToken := c.Get("user").(*jwt.Token)
-    claims := userToken.Claims.(jwt.MapClaims)
-    roleID := int(claims["roleID"].(float64))
+    log.Println("AddAdmin called")
 
-    log.Printf("Received RoleID: %d", roleID)
+    // Retrieve roleID and userID from context set by middleware
+    roleID, ok := c.Get("roleID").(int)
+    if !ok {
+        log.Println("Failed to get roleID from context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
 
+    userID, ok := c.Get("userID").(int)
+    if !ok {
+        log.Println("Failed to get userID from context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    log.Printf("Received RoleID: %d, UserID: %d", roleID, userID)
+
+    // Check if the roleID is 1 (Super Admin)
     if roleID != 1 {
         log.Println("Permission denied: non-super admin trying to add admin")
         return c.JSON(http.StatusForbidden, echo.Map{"error": "Permission denied"})
@@ -69,7 +81,9 @@ func AddAdmin(c echo.Context) error {
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
-    newAdmin.RoleID = 2
+    log.Printf("New admin data: %+v", newAdmin)
+
+    newAdmin.RoleID = 2 // Set roleID for new admin
 
     hashedPassword, err := utils.HashPassword(newAdmin.Password)
     if err != nil {
@@ -77,6 +91,8 @@ func AddAdmin(c echo.Context) error {
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not hash password"})
     }
     newAdmin.Password = hashedPassword
+
+    log.Printf("Saving new admin to database")
 
     if err := db.GetDB().Create(&newAdmin).Error; err != nil {
         log.Printf("Create error: %v", err)
@@ -86,6 +102,7 @@ func AddAdmin(c echo.Context) error {
     log.Println("Admin added successfully")
     return c.JSON(http.StatusOK, echo.Map{"message": "Admin added successfully", "admin": newAdmin})
 }
+
 
 func SuperAdminAddOrganization(c echo.Context) error {
     userToken := c.Get("user").(*jwt.Token)
@@ -106,7 +123,7 @@ func SuperAdminAddOrganization(c echo.Context) error {
     }
 
     // Create the organization in the database
-    if err := db.GetDB().Create(&newOrganization).Error; err != nil {
+    if err := utils.DB.Create(&newOrganization).Error; err != nil {
         log.Printf("Create error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
     }
@@ -114,6 +131,7 @@ func SuperAdminAddOrganization(c echo.Context) error {
     log.Println("Organization added successfully")
     return c.JSON(http.StatusOK, echo.Map{"message": "Organization added successfully", "organization": newOrganization})
 }
+
 
 func SuperAdminLogin(c echo.Context) error {
     var input struct {

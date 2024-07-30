@@ -12,6 +12,8 @@ type Organization struct {
     City        string    `json:"city"`
     State       string    `json:"state"`
     Country     string    `json:"country"`
+    Password    string      `json: "password"`
+    RoleID    uint           `json:"role_id"`
     CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
     UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
     DeletedAt   *time.Time `gorm:"index" json:"deletedAt,omitempty"`
