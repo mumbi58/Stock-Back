@@ -13,6 +13,11 @@ import (
 func AuthMiddleware(allowedRoles ...int) echo.MiddlewareFunc {
     return func(next echo.HandlerFunc) echo.HandlerFunc {
         return func(c echo.Context) error {
+            // Skip authentication for login and logout routes
+            if c.Path() == "/login" || c.Path() == "/logout" {
+                return next(c)
+            }
+
             authHeader := c.Request().Header.Get("Authorization")
             if authHeader == "" {
                 return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Authorization header is required"})
@@ -45,6 +50,7 @@ func AuthMiddleware(allowedRoles ...int) echo.MiddlewareFunc {
                 return c.JSON(http.StatusForbidden, echo.Map{"error": "Access forbidden"})
             }
 
+            // Set context values
             c.Set("userID", userID)
             c.Set("roleID", roleID)
 
