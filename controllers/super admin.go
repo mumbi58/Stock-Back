@@ -12,12 +12,22 @@ import (
     "stock-back/db"
     "stock-back/models"
     "stock-back/utils"
+    "stock-back/validators"
 )
 
 func SuperAdminSignup(c echo.Context) error {
     var input models.User
     if err := c.Bind(&input); err != nil {
         log.Printf("Bind error: %v", err)
+        return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+    }
+
+    loginInput := validators.LoginInput{
+        Username: input.Email,
+        Password: input.Password,
+    }
+    if err := validators.ValidateLoginInput(loginInput); err != nil {
+        log.Printf("Validation error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
@@ -83,6 +93,17 @@ func AddAdmin(c echo.Context) error {
 
     log.Printf("New admin data: %+v", newAdmin)
 
+    loginInput := validators.LoginInput{
+        Username: newAdmin.Email,
+        Password: newAdmin.Password,
+    }
+    if err := validators.ValidateLoginInput(loginInput); err != nil {
+        log.Printf("Validation error: %v", err)
+        return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+    }
+
+    log.Printf("New admin data: %+v", newAdmin)
+
     newAdmin.RoleID = 2 // Set roleID for new admin
 
     hashedPassword, err := utils.HashPassword(newAdmin.Password)
@@ -130,6 +151,8 @@ func SuperAdminAddOrganization(c echo.Context) error {
         log.Printf("Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
+
+
 
     newOrganization.RoleID = 5
 
