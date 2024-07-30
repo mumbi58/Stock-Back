@@ -10,35 +10,41 @@ import (
 	"net/http"
 )
 
-// / Get all Categories
+// Get all Categories
 func GetCategories(c echo.Context) error {
 	log.Println("Received request to fetch categories")
 	// Initialize database connection
 	db := database.InitDB()
 	defer db.Close()
+
 	// Query all categories from the Categories table
-	rows, err := db.Query("SELECT category_id, category_name, product_name FROM Categories")
+	rows, err := db.Query("SELECT category_id, category_name, product_name, product_description FROM Categories")
 	if err != nil {
 		log.Printf("Error querying categories from database: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 	}
 	defer rows.Close()
+
 	// Slice to hold the fetched categories
 	var categories []model.Category
+
 	// Iterate over the query results
 	for rows.Next() {
 		var cat model.Category
 
 		// Scan each row into the Category struct
-		if err := rows.Scan(&cat.CategoryID, &cat.CategoryName, &cat.ProductName); err != nil {
+		if err := rows.Scan(&cat.CategoryID, &cat.CategoryName, &cat.ProductName, &cat.ProductDescription); err != nil {
 			log.Printf("Error scanning category row: %s", err.Error())
 			return err
 		}
-		//Append the Category to the slice
+
+		// Append the Category to the slice
 		categories = append(categories, cat)
 	}
+
 	// Log the number of Categories fetched
 	log.Printf("Fetched %d categories", len(categories))
+
 	// Return the fetched Categories as JSON
 	return c.JSON(http.StatusOK, categories)
 }

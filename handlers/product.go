@@ -18,8 +18,8 @@ func GetProducts(c echo.Context) error {
 	db := database.InitDB()
 	defer db.Close()
 
-	// Query all products from the products table
-	rows, err := db.Query("SELECT product_id, category_name, product_name, product_code, date, quantity, reorder_level, price FROM products")
+	// Query all products from the products table, including product_description
+	rows, err := db.Query("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products")
 	if err != nil {
 		log.Printf("Error querying products from database: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
@@ -34,14 +34,14 @@ func GetProducts(c echo.Context) error {
 		var prod model.Product
 
 		// Scan each row into the Product struct
-		err := rows.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
+		err := rows.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
 		if err != nil {
 			// Check if the error is due to NULL value in reorder_level or price
-			if err.Error() == "sql: Scan error on column index 6, name \"reorder_level\": converting NULL to int is unsupported" {
+			if err.Error() == "sql: Scan error on column index 7, name \"reorder_level\": converting NULL to int is unsupported" {
 				// Handle NULL value scenario for reorder_level
 				log.Printf("Null value encountered in reorder_level column")
 				prod.ReorderLevel = 0 // Or set it to any default value as per your application logic
-			} else if err.Error() == "sql: Scan error on column index 7, name \"price\": converting NULL to float64 is unsupported" {
+			} else if err.Error() == "sql: Scan error on column index 8, name \"price\": converting NULL to float64 is unsupported" {
 				// Handle NULL value scenario for price
 				log.Printf("Null value encountered in price column")
 				prod.Price = 0.0 // Or set it to any default value as per your application logic
@@ -60,7 +60,6 @@ func GetProducts(c echo.Context) error {
 		log.Printf("Error iterating over product rows: %s", err.Error())
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 	}
-
 	// Log the number of Products fetched
 	log.Printf("Fetched %d products", len(products))
 
@@ -83,12 +82,12 @@ func GetProductByID(c echo.Context) error {
 	db := database.InitDB()
 	defer db.Close()
 
-	// Query the product by product_id
-	row := db.QueryRow("SELECT product_id, category_name, product_name, product_code, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID)
+	// Query the product by product_id, including product_description
+	row := db.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID)
 	var prod model.Product
 
 	// Scan the row into the Product struct
-	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
+	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
 	if err != nil {
 		// Check if the error is due to a "not found" condition
 		if err == sql.ErrNoRows {
@@ -107,7 +106,6 @@ func GetProductByID(c echo.Context) error {
 	// Return the fetched Product as JSON
 	return c.JSON(http.StatusOK, prod)
 }
-
 func AddProduct(c echo.Context) error {
 	// Initialize database connection
 	db := database.InitDB()
@@ -122,12 +120,12 @@ func AddProduct(c echo.Context) error {
 
 	// Log the received product details
 	log.Printf("Received request to create a product: %+v", product)
-	////////////mmmmmmgi
-	// Execute the SQL INSERT query to add the product to the database
+
+	// Execute the SQL INSERT query to add the product to the database, including product_description
 	result, err := db.Exec(`
-        INSERT INTO products (category_name, product_name, product_code, date, quantity, reorder_level, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, product.CategoryName, product.ProductName, product.ProductCode, product.Date, product.Quantity, product.ReorderLevel, product.Price)
+        INSERT INTO products (category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, product.CategoryName, product.ProductName, product.ProductCode, product.ProductDescription, product.Date, product.Quantity, product.ReorderLevel, product.Price)
 	if err != nil {
 		log.Printf("Error inserting product: %s", err.Error())
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error inserting product")
@@ -142,12 +140,13 @@ func AddProduct(c echo.Context) error {
 	product.ProductID = int(productID)
 
 	// Log the successful creation and the product details
-	log.Printf("Product created successfully. Product ID: %d, Category: %s, Name: %s, Code: %s, Date: %s, Quantity: %d, Reorder Level: %d, Price: %.2f",
-		product.ProductID, product.CategoryName, product.ProductName, product.ProductCode, product.Date, product.Quantity, product.ReorderLevel, product.Price)
+	log.Printf("Product created successfully. Product ID: %d, Category: %s, Name: %s, Code: %s, Description: %s, Date: %s, Quantity: %d, Reorder Level: %d, Price: %.2f",
+		product.ProductID, product.CategoryName, product.ProductName, product.ProductCode, product.ProductDescription, product.Date, product.Quantity, product.ReorderLevel, product.Price)
 
 	// Return the created product as JSON with status 201 Created
 	return c.JSON(http.StatusCreated, product)
 }
+
 func UpdateProduct(c echo.Context) error {
 	// Initialize database connection
 	db := database.InitDB()
@@ -163,12 +162,14 @@ func UpdateProduct(c echo.Context) error {
 		log.Printf("Error binding payload: %s", err.Error())
 		return echo.NewHTTPError(http.StatusBadRequest, "Failed to parse request body")
 	}
-	// Execute the SQL UPDATE query to update the product in the database
+
+	// Execute the SQL UPDATE query to update the product in the database, including product_description
 	query := `
         UPDATE products 
         SET category_name = ?, 
             product_name = ?, 
             product_code = ?, 
+            product_description = ?, 
             date = ?, 
             quantity = ?, 
             reorder_level = ?, 
@@ -179,6 +180,7 @@ func UpdateProduct(c echo.Context) error {
 		updatedProduct.CategoryName,
 		updatedProduct.ProductName,
 		updatedProduct.ProductCode,
+		updatedProduct.ProductDescription, // Added this line
 		updatedProduct.Date,
 		updatedProduct.Quantity,
 		updatedProduct.ReorderLevel,

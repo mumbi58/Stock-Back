@@ -9,7 +9,302 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-)
+	"time"
+) // SellProduct handles the sale of a product and updates the quantity in the database.
+
+func SellProduct(c echo.Context) error {
+	productIDStr := c.Param("product_id")
+	quantitySoldStr := c.Param("quantity_sold")
+	userID := c.QueryParam("user_id") // Assuming user_id is passed as a query parameter
+
+	// Convert parameters to integer values
+	productID, err := strconv.Atoi(productIDStr)
+	if err != nil {
+		log.Printf("Invalid product ID: %s", productIDStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+	}
+
+	quantitySold, err := strconv.Atoi(quantitySoldStr)
+	if err != nil {
+		log.Printf("Invalid quantity sold: %s", quantitySoldStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid quantity sold")
+	}
+
+	// Initialize database connection
+	db := database.InitDB()
+	defer db.Close()
+
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+	defer tx.Rollback()
+
+	// Check current quantity and retrieve category of the product
+	var product model.Product
+	err = tx.QueryRow(`
+        SELECT product_id, category_name, product_name, product_code, date, quantity, reorder_level, price 
+        FROM products 
+        WHERE product_id = ?
+    `, productID).Scan(
+		&product.ProductID,
+		&product.CategoryName,
+		&product.ProductName,
+		&product.ProductCode,
+		&product.Date,
+		&product.Quantity,
+		&product.ReorderLevel,
+		&product.Price,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Product not found with ID: %d", productID)
+			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+		}
+		log.Printf("Error querying product details: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Check if enough quantity is available
+	if product.Quantity < quantitySold {
+		log.Printf("Insufficient quantity for product ID %d: Available %d, Requested %d", productID, product.Quantity, quantitySold)
+		return echo.NewHTTPError(http.StatusBadRequest, "Insufficient quantity")
+	}
+
+	// Update the quantity of the product
+	newQuantity := product.Quantity - quantitySold
+	_, err = tx.Exec("UPDATE products SET quantity = ? WHERE product_id = ?", newQuantity, productID)
+	if err != nil {
+		log.Printf("Error updating product quantity: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Insert sale record into the sale table, including category_name
+	_, err = tx.Exec(`
+        INSERT INTO sale (name, price, quantity, user_id, date, category_name)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `, product.ProductName, product.Price, quantitySold, userID, time.Now(), product.CategoryName)
+	if err != nil {
+		log.Printf("Error inserting sale record: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Log successful sale
+	log.Printf("Sold %d units of product ID %d. Remaining quantity: %d", quantitySold, productID, newQuantity)
+
+	// Return success response
+	return c.JSON(http.StatusOK, map[string]string{
+		"message":       "Sale processed successfully",
+		"product_id":    strconv.Itoa(productID),
+		"quantity_sold": strconv.Itoa(quantitySold),
+		"remaining_qty": strconv.Itoa(newQuantity),
+	})
+}
+
+func SellProducttttttttyy(c echo.Context) error {
+	productIDStr := c.Param("product_id")
+	quantitySoldStr := c.Param("quantity_sold")
+	userID := c.QueryParam("user_id") // Assuming user_id is passed as a query parameter
+
+	// Convert parameters to integer values
+	productID, err := strconv.Atoi(productIDStr)
+	if err != nil {
+		log.Printf("Invalid product ID: %s", productIDStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+	}
+
+	quantitySold, err := strconv.Atoi(quantitySoldStr)
+	if err != nil {
+		log.Printf("Invalid quantity sold: %s", quantitySoldStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid quantity sold")
+	}
+
+	// Initialize database connection
+	db := database.InitDB()
+	defer db.Close()
+
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+	defer tx.Rollback()
+
+	// Check current quantity of the product
+	var product model.Product
+	err = tx.QueryRow("SELECT product_id, category_name, product_name, product_code, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID).Scan(
+		&product.ProductID,
+		&product.CategoryName,
+		&product.ProductName,
+		&product.ProductCode,
+		&product.Date,
+		&product.Quantity,
+		&product.ReorderLevel,
+		&product.Price,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Product not found with ID: %d", productID)
+			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+		}
+		log.Printf("Error querying product details: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Check if enough quantity is available
+	if product.Quantity < quantitySold {
+		log.Printf("Insufficient quantity for product ID %d: Available %d, Requested %d", productID, product.Quantity, quantitySold)
+		return echo.NewHTTPError(http.StatusBadRequest, "Insufficient quantity")
+	}
+
+	// Update the quantity of the product
+	newQuantity := product.Quantity - quantitySold
+	_, err = tx.Exec("UPDATE products SET quantity = ? WHERE product_id = ?", newQuantity, productID)
+	if err != nil {
+		log.Printf("Error updating product quantity: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Insert sale record into the sale table
+	_, err = tx.Exec(`
+        INSERT INTO sale (name, price, quantity, user_id, date)
+        VALUES (?, ?, ?, ?, ?)
+    `, product.ProductName, product.Price, quantitySold, userID, time.Now())
+	if err != nil {
+		log.Printf("Error inserting sale record: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Log successful sale
+	log.Printf("Sold %d units of product ID %d. Remaining quantity: %d", quantitySold, productID, newQuantity)
+
+	// Return success response
+	return c.JSON(http.StatusOK, map[string]string{
+		"message":       "Sale processed successfully",
+		"product_id":    strconv.Itoa(productID),
+		"quantity_sold": strconv.Itoa(quantitySold),
+		"remaining_qty": strconv.Itoa(newQuantity),
+	})
+}
+
+func SellProductt(c echo.Context) error {
+	productIDStr := c.Param("product_id")
+	quantitySoldStr := c.Param("quantity_sold")
+	userID := c.QueryParam("user_id") // Assuming user_id is passed as a query parameter
+
+	// Convert parameters to integer values
+	productID, err := strconv.Atoi(productIDStr)
+	if err != nil {
+		log.Printf("Invalid product ID: %s", productIDStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+	}
+
+	quantitySold, err := strconv.Atoi(quantitySoldStr)
+	if err != nil {
+		log.Printf("Invalid quantity sold: %s", quantitySoldStr)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid quantity sold")
+	}
+
+	// Initialize database connection
+	db := database.InitDB()
+	defer db.Close()
+
+	// Start a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+	defer tx.Rollback()
+
+	// Check current quantity of the product
+	var product model.Product
+	err = tx.QueryRow("SELECT product_id, category_name, product_name, product_code, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID).Scan(
+		&product.ProductID,
+		&product.CategoryName,
+		&product.ProductName,
+		&product.ProductCode,
+		&product.Date,
+		&product.Quantity,
+		&product.ReorderLevel,
+		&product.Price,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Product not found with ID: %d", productID)
+			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+		}
+		log.Printf("Error querying product details: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Check if enough quantity is available
+	if product.Quantity < quantitySold {
+		log.Printf("Insufficient quantity for product ID %d: Available %d, Requested %d", productID, product.Quantity, quantitySold)
+		return echo.NewHTTPError(http.StatusBadRequest, "Insufficient quantity")
+	}
+
+	// Update the quantity of the product
+	newQuantity := product.Quantity - quantitySold
+	_, err = tx.Exec("UPDATE products SET quantity = ? WHERE product_id = ?", newQuantity, productID)
+	if err != nil {
+		log.Printf("Error updating product quantity: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Insert sale record into the correct table
+	sale := model.Sale{
+		Name:     product.ProductName,
+		Price:    product.Price,
+		Quantity: quantitySold,
+		UserID:   userID,
+		Date:     time.Now(),
+	}
+
+	_, err = tx.Exec(`
+        INSERT INTO sale (name, price, quantity, user_id, date)
+        VALUES (?, ?, ?, ?, ?)
+    `, sale.Name, sale.Price, sale.Quantity, sale.UserID, sale.Date.Format("2006-01-02 15:04:05"))
+	if err != nil {
+		log.Printf("Error inserting sale record: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Log successful sale
+	log.Printf("Sold %d units of product ID %d. Remaining quantity: %d", quantitySold, productID, newQuantity)
+
+	// Return success response
+	return c.JSON(http.StatusOK, map[string]string{
+		"message":       "Sale processed successfully",
+		"product_id":    strconv.Itoa(productID),
+		"quantity_sold": strconv.Itoa(quantitySold),
+		"remaining_qty": strconv.Itoa(newQuantity),
+	})
+}
 
 func GetSales(c echo.Context) error {
 	log.Println("Received request to fetch sales")
