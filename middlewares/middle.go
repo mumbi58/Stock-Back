@@ -73,8 +73,6 @@ func contains(slice []int, value int) bool {
     return false
 }
 
-// Role-based middlewares
-
 func SuperAdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {
         roleID, ok := c.Get("roleID").(int)

@@ -11,12 +11,12 @@ func SetupRoutes(e *echo.Echo) {
     // Public routes
     e.POST("/superadmin/login", controllers.SuperAdminLogin)
     e.POST("/superadmin/logout", controllers.SuperAdminLogout)
-    e.POST("/login", controllers.AdminLogin)
-    e.POST("/logout", controllers.AdminLogout)
+    e.POST("admin/login", controllers.AdminLogin)
+    e.POST("admin/logout", controllers.AdminLogout)
     e.POST("/login", controllers.Login)
     e.POST("/logout", controllers.Logout)
-    e.POST("/login", controllers.AuditorLogin)
-    e.POST("/logout", controllers.AuditorLogout)
+    e.POST("auditor/login", controllers.AuditorLogin)
+    e.POST("auditor/logout", controllers.AuditorLogout)
 
     // Super Admin routes
     superadmin := e.Group("/superadmin")
@@ -32,4 +32,5 @@ func SetupRoutes(e *echo.Echo) {
     adminGroup.GET("/user/:id", controllers.GetUserByID)
     adminGroup.PUT("/user/:id", controllers.EditUser)
     adminGroup.DELETE("/user/:id", controllers.SoftDeleteUser)
+    //adminGroup.DELETE("/organization:id", controllers.AdminDeleteOrganization)
 }

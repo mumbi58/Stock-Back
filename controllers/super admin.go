@@ -23,7 +23,7 @@ func SuperAdminSignup(c echo.Context) error {
     }
 
     loginInput := validators.LoginInput{
-        Username: input.Email,
+        Username: input.Username,
         Password: input.Password,
     }
     if err := validators.ValidateLoginInput(loginInput); err != nil {
@@ -152,8 +152,6 @@ func SuperAdminAddOrganization(c echo.Context) error {
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
-
-
     newOrganization.RoleID = 5
 
     if err := db.GetDB().Create(&newOrganization).Error; err != nil {
@@ -203,126 +201,141 @@ func SuperAdminLogout(c echo.Context) error {
 }
 
 func AdminLogin(c echo.Context) error {
+    log.Println("AdminLogin - Entry")
+
     var input struct {
         Email    string `json:"email" binding:"required"`
         Password string `json:"password" binding:"required"`
     }
 
     if err := c.Bind(&input); err != nil {
-        log.Printf("Bind error: %v", err)
+        log.Printf("AdminLogin - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
+    log.Printf("AdminLogin - Received input: %+v", input)
+
     var user models.User
     if err := db.GetDB().Where("email = ?", input.Email).First(&user).Error; err != nil {
-        log.Printf("Where error: %v", err)
+        log.Printf("AdminLogin - Where error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
     if err := utils.CheckPasswordHash(input.Password, user.Password); err != nil {
-        log.Printf("CheckPasswordHash error: %v", err)
+        log.Printf("AdminLogin - CheckPasswordHash error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
     token, err := utils.GenerateJWT(user.ID, user.RoleID)
     if err != nil {
-        log.Printf("GenerateJWT error: %v", err)
+        log.Printf("AdminLogin - GenerateJWT error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not generate token"})
     }
 
-    log.Println("Admin logged in successfully")
+    log.Println("AdminLogin - Admin logged in successfully")
+    log.Println("AdminLogin - Exit")
     return c.JSON(http.StatusOK, echo.Map{"token": token})
 }
 
 func GetUserByID(c echo.Context) error {
     id, _ := strconv.Atoi(c.Param("id"))
-    log.Printf("GetUserByID called with ID: %d", id)
+    log.Printf("GetUserByID - Entry with ID: %d", id)
     
     var user models.User
     if err := db.GetDB().First(&user, id).Error; err != nil {
-        log.Printf("First error: %v", err)
+        log.Printf("GetUserByID - First error: %v", err)
         return c.JSON(http.StatusNotFound, echo.Map{"error": "User not found"})
     }
     
-    log.Printf("User found: %+v", user)
+    log.Printf("GetUserByID - User found: %+v", user)
+    log.Println("GetUserByID - Exit")
     return c.JSON(http.StatusOK, user)
 }
 
 func AdminAddUser(c echo.Context) error {
+    log.Println("AdminAddUser - Entry")
+
     var input models.User
     if err := c.Bind(&input); err != nil {
-        log.Printf("Bind error: %v", err)
+        log.Printf("AdminAddUser - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
+    log.Printf("AdminAddUser - Received input: %+v", input)
+
     user, ok := c.Get("user").(models.User)
     if !ok {
-        log.Println("Unauthorized: user not found in context")
+        log.Println("AdminAddUser - Unauthorized: user not found in context")
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
     }
 
     if user.RoleID != 2 {
-        log.Println("Admins only: unauthorized role")
+        log.Println("AdminAddUser - Admins only: unauthorized role")
         return c.JSON(http.StatusForbidden, echo.Map{"error": "Admins only"})
     }
 
     if input.RoleID != 3 && input.RoleID != 4 && input.RoleID != 2 {
-        log.Println("Invalid role ID provided")
+        log.Println("AdminAddUser - Invalid role ID provided")
         return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid role ID. Allowed roles: 3 (shopkeeper), 4 (auditor), 2 (admin)"})
     }
 
     hashedPassword, err := utils.HashPassword(input.Password)
     if err != nil {
-        log.Printf("HashPassword error: %v", err)
+        log.Printf("AdminAddUser - HashPassword error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not hash password"})
     }
     input.Password = hashedPassword
 
     if err := db.GetDB().Create(&input).Error; err != nil {
-        log.Printf("Create error: %v", err)
+        log.Printf("AdminAddUser - Create error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
     }
 
-    log.Println("User created successfully")
+    log.Println("AdminAddUser - User created successfully")
+    log.Println("AdminAddUser - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "User created successfully"})
 }
 
 func EditUser(c echo.Context) error {
     id := c.Param("id")
-    log.Printf("EditUser called with ID: %s", id)
+    log.Printf("EditUser - Entry with ID: %s", id)
     
     var user models.User
     if err := db.GetDB().First(&user, id).Error; err != nil {
-        log.Printf("First error: %v", err)
+        log.Printf("EditUser - First error: %v", err)
         return c.JSON(http.StatusNotFound, echo.Map{"error": "User not found"})
     }
 
+    log.Printf("EditUser - Current user details: %+v", user)
+
     if err := c.Bind(&user); err != nil {
-        log.Printf("Bind error: %v", err)
+        log.Printf("EditUser - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
     if err := db.GetDB().Save(&user).Error; err != nil {
-        log.Printf("Save error: %v", err)
+        log.Printf("EditUser - Save error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
     }
 
-    log.Println("User updated successfully")
+    log.Println("EditUser - User updated successfully")
+    log.Println("EditUser - Exit")
     return c.JSON(http.StatusOK, user)
 }
 
 func SoftDeleteUser(c echo.Context) error {
     id := c.Param("id")
-    log.Printf("SoftDeleteUser called with ID: %s", id)
+    log.Printf("SoftDeleteUser - Entry with ID: %s", id)
     
     var user models.User
 
     if user.RoleID == 1 { // Superadmin
-            return c.JSON(http.StatusForbidden, "Only superadmins can delete superadmin users")
-        }
+        log.Println("SoftDeleteUser - Only superadmins can delete superadmin users")
+        return c.JSON(http.StatusForbidden, "Only superadmins can delete superadmin users")
+    }
     
     if err := db.GetDB().First(&user, id).Error; err != nil {
-        log.Printf("First error: %v", err)
+        log.Printf("SoftDeleteUser - First error: %v", err)
         return c.JSON(http.StatusNotFound, echo.Map{"error": "User not found"})
     }
 
@@ -332,38 +345,84 @@ func SoftDeleteUser(c echo.Context) error {
     }
 
     if err := db.GetDB().Save(&user).Error; err != nil {
+        log.Printf("SoftDeleteUser - Save error: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+    }
+
+    log.Println("SoftDeleteUser - User soft deleted successfully")
+    log.Println("SoftDeleteUser - Exit")
+    return c.JSON(http.StatusOK, echo.Map{"message": "User soft deleted successfully"})
+}
+
+/*func SoftDeleteOrganization(c echo.Context) error {
+    id := c.Param("id")
+    log.Printf("SoftDeleteOrganization called with ID: %s", id)
+
+    // Retrieve roleID from the context
+    roleID := c.Get("roleID").(int)
+    if roleID != 2 {
+        return c.JSON(http.StatusForbidden, "Only admins can delete organizations")
+    }
+
+    var organization models.Organization
+
+    if err := db.GetDB().First(&organization, id).Error; err != nil {
+        log.Printf("First error: %v", err)
+        return c.JSON(http.StatusNotFound, echo.Map{"error": "Organization not found"})
+    }
+
+    if organization.RoleID != 5 {
+        return c.JSON(http.StatusForbidden, "Unauthorized: Only organizations can be deleted")
+    }
+
+    // Set DeletedAt field
+    organization.DeletedAt = &gorm.DeletedAt{
+        Time:  time.Now(),
+        Valid: true,
+    }
+
+    if err := db.GetDB().Save(&organization).Error; err != nil {
         log.Printf("Save error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
     }
 
-    log.Println("User soft deleted successfully")
-    return c.JSON(http.StatusOK, echo.Map{"message": "User soft deleted successfully"})
+    log.Println("Organization soft deleted successfully")
+    return c.JSON(http.StatusOK, echo.Map{"message": "Organization soft deleted successfully"})
 }
 
+am getting this error on postman  "error": "Access forbidden" and this error on 2024/07/30 15:10:22 Token parsed successfully. UserID: 30, RoleID: 1 Failed to get JWT token from context. help me fix it
+*/
+
 func AdminLogout(c echo.Context) error {
-    log.Println("Admin logged out successfully")
+    log.Println("AdminLogout - Entry")
+    log.Println("AdminLogout - Admin logged out successfully")
+    log.Println("AdminLogout - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "Successfully logged out"})
 }
 
 func Login(c echo.Context) error {
+    log.Println("Login - Entry")
+
     var loginData struct {
         Email    string `json:"email" binding:"required"`
         Password string `json:"password" binding:"required"`
     }
 
     if err := c.Bind(&loginData); err != nil {
-        log.Printf("Bind error: %v", err)
+        log.Printf("Login - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
+    log.Printf("Login - Received data: %+v", loginData)
+
     var user models.User
     if err := db.GetDB().Where("email = ?", loginData.Email).First(&user).Error; err != nil {
-        log.Printf("Where error: %v", err)
+        log.Printf("Login - Where error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
     if err := utils.CheckPasswordHash(loginData.Password, user.Password); err != nil {
-        log.Printf("CheckPasswordHash error: %v", err)
+        log.Printf("Login - CheckPasswordHash error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
@@ -375,38 +434,45 @@ func Login(c echo.Context) error {
 
     tokenString, err := token.SignedString(utils.JwtSecret)
     if err != nil {
-        log.Printf("SignedString error: %v", err)
+        log.Printf("Login - SignedString error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not generate token"})
     }
 
-    log.Println("User logged in successfully")
+    log.Println("Login - User logged in successfully")
+    log.Println("Login - Exit")
     return c.JSON(http.StatusOK, echo.Map{"token": tokenString})
 }
 
 func Logout(c echo.Context) error {
-    log.Println("User logged out successfully")
+    log.Println("Logout - Entry")
+    log.Println("Logout - User logged out successfully")
+    log.Println("Logout - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "Successfully logged out"})
 }
 
 func AuditorLogin(c echo.Context) error {
+    log.Println("AuditorLogin - Entry")
+
     var loginData struct {
         Email    string `json:"email" binding:"required"`
         Password string `json:"password" binding:"required"`
     }
 
     if err := c.Bind(&loginData); err != nil {
-        log.Printf("Bind error: %v", err)
+        log.Printf("AuditorLogin - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
+    log.Printf("AuditorLogin - Received data: %+v", loginData)
+
     var user models.User
     if err := db.GetDB().Where("email = ?", loginData.Email).First(&user).Error; err != nil {
-        log.Printf("Where error: %v", err)
+        log.Printf("AuditorLogin - Where error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
     if err := utils.CheckPasswordHash(loginData.Password, user.Password); err != nil {
-        log.Printf("CheckPasswordHash error: %v", err)
+        log.Printf("AuditorLogin - CheckPasswordHash error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
@@ -418,15 +484,19 @@ func AuditorLogin(c echo.Context) error {
 
     tokenString, err := token.SignedString(utils.JwtSecret)
     if err != nil {
-        log.Printf("SignedString error: %v", err)
+        log.Printf("AuditorLogin - SignedString error: %v", err)
         return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not generate token"})
     }
 
-    log.Println("Auditor logged in successfully")
+    log.Println("AuditorLogin - Auditor logged in successfully")
+    log.Println("AuditorLogin - Exit")
     return c.JSON(http.StatusOK, echo.Map{"token": tokenString})
 }
 
 func AuditorLogout(c echo.Context) error {
-    log.Println("Auditor logged out successfully")
+    log.Println("AuditorLogout - Entry")
+    log.Println("AuditorLogout - Auditor logged out successfully")
+    log.Println("AuditorLogout - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "Successfully logged out"})
 }
+
