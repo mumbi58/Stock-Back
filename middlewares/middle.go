@@ -55,6 +55,7 @@ func AuthMiddleware(allowedRoles ...int) echo.MiddlewareFunc {
             c.Set("roleID", roleID)
 
             if !contains(allowedRoles, roleID) {
+                log.Printf("Access denied for RoleID %d. Allowed roles: %v", roleID, allowedRoles)
                 return c.JSON(http.StatusForbidden, echo.Map{"error": "Access forbidden"})
             }
 
@@ -72,6 +73,8 @@ func contains(slice []int, value int) bool {
     }
     return false
 }
+
+// Role-specific middlewares
 
 func SuperAdminOnly(next echo.HandlerFunc) echo.HandlerFunc {
     return func(c echo.Context) error {

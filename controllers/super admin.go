@@ -71,6 +71,7 @@ func AddAdmin(c echo.Context) error {
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
     }
 
+
     userID, ok := c.Get("userID").(int)
     if !ok {
         log.Println("Failed to get userID from context")
@@ -255,25 +256,36 @@ func GetUserByID(c echo.Context) error {
 func AdminAddUser(c echo.Context) error {
     log.Println("AdminAddUser - Entry")
 
+    // Retrieve userID and roleID from context set by middleware
+    userID, ok := c.Get("userID").(int)
+    if !ok {
+        log.Println("AdminAddUser - Unauthorized: userID not found in context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    roleID, ok := c.Get("roleID").(int)
+    if !ok {
+        log.Println("AdminAddUser - Unauthorized: roleID not found in context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    log.Printf("AdminAddUser - Received RoleID: %d, UserID: %d", roleID, userID)
+
+    // Check if the roleID is 2 (Admin)
+    if roleID != 2 {
+        log.Println("AdminAddUser - Permission denied: non-admin trying to add user")
+        return c.JSON(http.StatusForbidden, echo.Map{"error": "Permission denied"})
+    }
+
     var input models.User
     if err := c.Bind(&input); err != nil {
         log.Printf("AdminAddUser - Bind error: %v", err)
         return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
     }
 
-    log.Printf("AdminAddUser - Received input: %+v", input)
+    log.Printf("AdminAddUser - New user data: %+v", input)
 
-    user, ok := c.Get("user").(models.User)
-    if !ok {
-        log.Println("AdminAddUser - Unauthorized: user not found in context")
-        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
-    }
-
-    if user.RoleID != 2 {
-        log.Println("AdminAddUser - Admins only: unauthorized role")
-        return c.JSON(http.StatusForbidden, echo.Map{"error": "Admins only"})
-    }
-
+    // Validate roleID for new user
     if input.RoleID != 3 && input.RoleID != 4 && input.RoleID != 2 {
         log.Println("AdminAddUser - Invalid role ID provided")
         return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid role ID. Allowed roles: 3 (shopkeeper), 4 (auditor), 2 (admin)"})
@@ -389,7 +401,6 @@ func SoftDeleteUser(c echo.Context) error {
     log.Println("Organization soft deleted successfully")
     return c.JSON(http.StatusOK, echo.Map{"message": "Organization soft deleted successfully"})
 }
-
 am getting this error on postman  "error": "Access forbidden" and this error on 2024/07/30 15:10:22 Token parsed successfully. UserID: 30, RoleID: 1 Failed to get JWT token from context. help me fix it
 */
 
