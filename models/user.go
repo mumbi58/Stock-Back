@@ -13,6 +13,7 @@ type User struct {
     FirstName string         `json:"first_name" gorm:"type:varchar(255)"`
     LastName  string         `json:"last_name" gorm:"type:varchar(255)"`
     RoleID    uint           `json:"role_id"`
+    IsActive  bool           `json:"is_active" gorm:"default:true"`
     CreatedAt time.Time      `json:"created_at"`
     UpdatedAt time.Time      `json:"updated_at"`
     DeletedAt gorm.DeletedAt `json:"deleted_at"`

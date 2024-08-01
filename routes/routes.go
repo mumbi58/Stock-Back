@@ -32,5 +32,12 @@ func SetupRoutes(e *echo.Echo) {
     adminGroup.GET("/user/:id", controllers.GetUserByID)
     adminGroup.PUT("/user/:id", controllers.EditUser)
     adminGroup.DELETE("/user/:id", controllers.SoftDeleteUser)
+    adminGroup.GET("/user", controllers.AdminViewAllUsers)
+    adminGroup.GET("/organization/:id", controllers.GetOrganizationByID) 
+    adminGroup.GET("/organizations", controllers.GetAllOrganizations)
+    adminGroup.GET("/users/active", controllers.GetActiveUsers)       
+    adminGroup.GET("/users/inactive", controllers.GetInactiveUsers)   
+    adminGroup.GET("/organizations/active", controllers.GetActiveOrganizations)       
+    adminGroup.GET("/organizations/inactive", controllers.GetInactiveOrganizations)  
     //adminGroup.DELETE("/organization:id", controllers.AdminDeleteOrganization)
 }

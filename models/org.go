@@ -14,6 +14,7 @@ type Organization struct {
     Country     string    `json:"country"`
     Password    string      `json: "password"`
     RoleID    uint           `json:"role_id"`
+    IsActive  bool           `json:"is_active" gorm:"default:true"`
     CreatedAt   time.Time `gorm:"autoCreateTime" json:"createdAt"`
     UpdatedAt   time.Time `gorm:"autoUpdateTime" json:"updatedAt"`
     DeletedAt   *time.Time `gorm:"index" json:"deletedAt,omitempty"`

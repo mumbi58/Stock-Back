@@ -164,9 +164,47 @@ func SuperAdminAddOrganization(c echo.Context) error {
     return c.JSON(http.StatusOK, echo.Map{"message": "Organization added successfully", "organization": newOrganization})
 }
 
+/*func SoftDeleteOrganization(c echo.Context) error {
+    id := c.Param("id")
+    log.Printf("SoftDeleteOrganization called with ID: %s", id)
+
+    // Retrieve roleID from the context
+    roleID := c.Get("roleID").(int)
+    if roleID != 2 {
+        return c.JSON(http.StatusForbidden, "Only admins can delete organizations")
+    }
+
+    var organization models.Organization
+
+    if err := db.GetDB().First(&organization, id).Error; err != nil {
+        log.Printf("First error: %v", err)
+        return c.JSON(http.StatusNotFound, echo.Map{"error": "Organization not found"})
+    }
+
+    if organization.RoleID != 5 {
+        return c.JSON(http.StatusForbidden, "Unauthorized: Only organizations can be deleted")
+    }
+
+    // Set DeletedAt field
+    organization.DeletedAt = &gorm.DeletedAt{
+        Time:  time.Now(),
+        Valid: true,
+    }
+
+    if err := db.GetDB().Save(&organization).Error; err != nil {
+        log.Printf("Save error: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+    }
+
+    log.Println("Organization soft deleted successfully")
+    return c.JSON(http.StatusOK, echo.Map{"message": "Organization soft deleted successfully"})
+}
+am getting this error on postman  "error": "Access forbidden" and this error on 2024/07/30 15:10:22 Token parsed successfully. UserID: 30, RoleID: 1 Failed to get JWT token from context. help me fix it
+*/
+
 func SuperAdminLogin(c echo.Context) error {
     var input struct {
-        Email    string `json:"email" binding:"required"`
+        Username    string `json:"username" binding:"required"`
         Password string `json:"password" binding:"required"`
     }
 
@@ -176,14 +214,14 @@ func SuperAdminLogin(c echo.Context) error {
     }
 
     var user models.User
-    if err := db.GetDB().Where("email = ?", input.Email).First(&user).Error; err != nil {
+    if err := db.GetDB().Where("username = ?", input.Username).First(&user).Error; err != nil {
         log.Printf("Where error: %v", err)
         return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
     }
 
     if err := utils.CheckPasswordHash(input.Password, user.Password); err != nil {
         log.Printf("CheckPasswordHash error: %v", err)
-        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid email or password"})
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Invalid username or password"})
     }
 
     token, err := utils.GenerateJWT(user.ID, user.RoleID)
@@ -335,6 +373,35 @@ func EditUser(c echo.Context) error {
     return c.JSON(http.StatusOK, user)
 }
 
+func AdminViewAllUsers(c echo.Context) error {
+    log.Println("AdminViewAllUsers - Entry")
+
+    // Retrieve roleID from context set by middleware
+    roleID, ok := c.Get("roleID").(int)
+    if !ok {
+        log.Println("AdminViewAllUsers - Failed to get roleID from context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    log.Printf("AdminViewAllUsers - Received RoleID: %d", roleID)
+
+    // Check if the roleID is 2 (Admin)
+    if roleID != 2 {
+        log.Println("AdminViewAllUsers - Permission denied: non-admin trying to view users")
+        return c.JSON(http.StatusForbidden, echo.Map{"error": "Permission denied"})
+    }
+
+    var users []models.User
+    if err := db.GetDB().Find(&users).Error; err != nil {
+        log.Printf("AdminViewAllUsers - Find error: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Could not retrieve users"})
+    }
+
+    log.Printf("AdminViewAllUsers - Retrieved users: %+v", users)
+    log.Println("AdminViewAllUsers - Exit")
+    return c.JSON(http.StatusOK, users)
+}
+
 func SoftDeleteUser(c echo.Context) error {
     id := c.Param("id")
     log.Printf("SoftDeleteUser - Entry with ID: %s", id)
@@ -365,44 +432,141 @@ func SoftDeleteUser(c echo.Context) error {
     log.Println("SoftDeleteUser - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "User soft deleted successfully"})
 }
+// ActivateUser activates a user
+func ActivateUser(c echo.Context) error {
+    userID := c.Param("id")
+    var user models.User
 
-/*func SoftDeleteOrganization(c echo.Context) error {
-    id := c.Param("id")
-    log.Printf("SoftDeleteOrganization called with ID: %s", id)
-
-    // Retrieve roleID from the context
-    roleID := c.Get("roleID").(int)
-    if roleID != 2 {
-        return c.JSON(http.StatusForbidden, "Only admins can delete organizations")
+    if err := db.GetDB().First(&user, userID).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]string{"message": "User not found"})
     }
 
-    var organization models.Organization
+    user.IsActive = true
+    if err := db.GetDB().Save(&user).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving user"})
+    }
 
-    if err := db.GetDB().First(&organization, id).Error; err != nil {
-        log.Printf("First error: %v", err)
+    return c.JSON(http.StatusOK, user)
+}
+
+// DeactivateUser deactivates a user
+func DeactivateUser(c echo.Context) error {
+    userID := c.Param("id")
+    var user models.User
+
+    if err := db.GetDB().First(&user, userID).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]string{"message": "User not found"})
+    }
+
+    user.IsActive = false
+    if err := db.GetDB().Save(&user).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving user"})
+    }
+
+    return c.JSON(http.StatusOK, user)
+}
+
+// GetOrganizationByID retrieves an organization by ID
+func GetOrganizationByID(c echo.Context) error {
+    id, _ := strconv.Atoi(c.Param("id"))
+    log.Printf("GetOrganizationByID - Entry with ID: %d", id)
+
+    var org models.Organization
+    if err := db.GetDB().First(&org, id).Error; err != nil {
+        log.Printf("GetOrganizationByID - First error: %v", err)
         return c.JSON(http.StatusNotFound, echo.Map{"error": "Organization not found"})
     }
 
-    if organization.RoleID != 5 {
-        return c.JSON(http.StatusForbidden, "Unauthorized: Only organizations can be deleted")
-    }
-
-    // Set DeletedAt field
-    organization.DeletedAt = &gorm.DeletedAt{
-        Time:  time.Now(),
-        Valid: true,
-    }
-
-    if err := db.GetDB().Save(&organization).Error; err != nil {
-        log.Printf("Save error: %v", err)
-        return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
-    }
-
-    log.Println("Organization soft deleted successfully")
-    return c.JSON(http.StatusOK, echo.Map{"message": "Organization soft deleted successfully"})
+    log.Printf("GetOrganizationByID - Organization found: %+v", org)
+    log.Println("GetOrganizationByID - Exit")
+    return c.JSON(http.StatusOK, org)
 }
-am getting this error on postman  "error": "Access forbidden" and this error on 2024/07/30 15:10:22 Token parsed successfully. UserID: 30, RoleID: 1 Failed to get JWT token from context. help me fix it
-*/
+
+// GetAllOrganizations retrieves all organizations
+func GetAllOrganizations(c echo.Context) error {
+    log.Println("GetAllOrganizations - Entry")
+
+    var orgs []models.Organization
+    if err := db.GetDB().Find(&orgs).Error; err != nil {
+        log.Printf("GetAllOrganizations - Find error: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error retrieving organizations"})
+    }
+
+    log.Printf("GetAllOrganizations - Organizations found: %+v", orgs)
+    log.Println("GetAllOrganizations - Exit")
+    return c.JSON(http.StatusOK, orgs)
+}
+
+// ActivateOrganization activates an organization
+func ActivateOrganization(c echo.Context) error {
+    orgID := c.Param("id")
+    var org models.Organization
+
+    if err := db.GetDB().First(&org, orgID).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]string{"message": "Organization not found"})
+    }
+
+    org.IsActive = true
+    if err := db.GetDB().Save(&org).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving organization"})
+    }
+
+    return c.JSON(http.StatusOK, org)
+}
+
+// DeactivateOrganization deactivates an organization
+func DeactivateOrganization(c echo.Context) error {
+    orgID := c.Param("id")
+    var org models.Organization
+
+    if err := db.GetDB().First(&org, orgID).Error; err != nil {
+        return c.JSON(http.StatusNotFound, map[string]string{"message": "Organization not found"})
+    }
+
+    org.IsActive = false
+    if err := db.GetDB().Save(&org).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving organization"})
+    }
+
+    return c.JSON(http.StatusOK, org)
+}
+
+// GetActiveUsers retrieves all active users
+func GetActiveUsers(c echo.Context) error {
+    var users []models.User
+    if err := db.GetDB().Where("is_active = ?", true).Find(&users).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error retrieving users"})
+    }
+    return c.JSON(http.StatusOK, users)
+}
+
+// GetInactiveUsers retrieves all inactive users
+func GetInactiveUsers(c echo.Context) error {
+    var users []models.User
+    if err := db.GetDB().Where("is_active = ?", false).Find(&users).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error retrieving users"})
+    }
+    return c.JSON(http.StatusOK, users)
+}
+
+// GetActiveOrganizations retrieves all active organizations
+func GetActiveOrganizations(c echo.Context) error {
+    var orgs []models.Organization
+    if err := db.GetDB().Where("is_active = ?", true).Find(&orgs).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error retrieving organizations"})
+    }
+    return c.JSON(http.StatusOK, orgs)
+}
+
+// GetInactiveOrganizations retrieves all inactive organizations
+func GetInactiveOrganizations(c echo.Context) error {
+    var orgs []models.Organization
+    if err := db.GetDB().Where("is_active = ?", false).Find(&orgs).Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error retrieving organizations"})
+    }
+    return c.JSON(http.StatusOK, orgs)
+}
+
 
 func AdminLogout(c echo.Context) error {
     log.Println("AdminLogout - Entry")
@@ -510,4 +674,5 @@ func AuditorLogout(c echo.Context) error {
     log.Println("AuditorLogout - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "Successfully logged out"})
 }
+
 
