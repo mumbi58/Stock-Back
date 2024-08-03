@@ -432,7 +432,7 @@ func SoftDeleteUser(c echo.Context) error {
     log.Println("SoftDeleteUser - Exit")
     return c.JSON(http.StatusOK, echo.Map{"message": "User soft deleted successfully"})
 }
-// ActivateUser activates a user
+
 func ActivateUser(c echo.Context) error {
     userID := c.Param("id")
     var user models.User
@@ -449,7 +449,6 @@ func ActivateUser(c echo.Context) error {
     return c.JSON(http.StatusOK, user)
 }
 
-// DeactivateUser deactivates a user
 func DeactivateUser(c echo.Context) error {
     userID := c.Param("id")
     var user models.User
@@ -466,7 +465,6 @@ func DeactivateUser(c echo.Context) error {
     return c.JSON(http.StatusOK, user)
 }
 
-// GetOrganizationByID retrieves an organization by ID
 func GetOrganizationByID(c echo.Context) error {
     id, _ := strconv.Atoi(c.Param("id"))
     log.Printf("GetOrganizationByID - Entry with ID: %d", id)
@@ -482,7 +480,6 @@ func GetOrganizationByID(c echo.Context) error {
     return c.JSON(http.StatusOK, org)
 }
 
-// GetAllOrganizations retrieves all organizations
 func GetAllOrganizations(c echo.Context) error {
     log.Println("GetAllOrganizations - Entry")
 
@@ -531,7 +528,6 @@ func DeactivateOrganization(c echo.Context) error {
     return c.JSON(http.StatusOK, org)
 }
 
-// GetActiveUsers retrieves all active users
 func GetActiveUsers(c echo.Context) error {
     var users []models.User
     if err := db.GetDB().Where("is_active = ?", true).Find(&users).Error; err != nil {
@@ -540,7 +536,6 @@ func GetActiveUsers(c echo.Context) error {
     return c.JSON(http.StatusOK, users)
 }
 
-// GetInactiveUsers retrieves all inactive users
 func GetInactiveUsers(c echo.Context) error {
     var users []models.User
     if err := db.GetDB().Where("is_active = ?", false).Find(&users).Error; err != nil {
@@ -549,7 +544,6 @@ func GetInactiveUsers(c echo.Context) error {
     return c.JSON(http.StatusOK, users)
 }
 
-// GetActiveOrganizations retrieves all active organizations
 func GetActiveOrganizations(c echo.Context) error {
     var orgs []models.Organization
     if err := db.GetDB().Where("is_active = ?", true).Find(&orgs).Error; err != nil {
@@ -558,7 +552,6 @@ func GetActiveOrganizations(c echo.Context) error {
     return c.JSON(http.StatusOK, orgs)
 }
 
-// GetInactiveOrganizations retrieves all inactive organizations
 func GetInactiveOrganizations(c echo.Context) error {
     var orgs []models.Organization
     if err := db.GetDB().Where("is_active = ?", false).Find(&orgs).Error; err != nil {
