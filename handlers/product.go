@@ -50,7 +50,6 @@ func GetProducts(c echo.Context) error {
 				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
 			}
 		}
-
 		// Append the Product to the slice
 		products = append(products, prod)
 	}

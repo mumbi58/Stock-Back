@@ -2,7 +2,7 @@ package main
 
 import (
 	"awesomeProject9/database"
-	"awesomeProject9/handlers"
+	"awesomeProject9/routes"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -28,29 +28,8 @@ func main() {
 		AllowOrigins: []string{os.Getenv("CORS_ALLOW_ORIGINS")},
 		AllowHeaders: []string{os.Getenv("CORS_ALLOW_HEADERS")},
 	}))
-
-	// Define CRUD endpoints
-	e.GET("/categories", handlers.GetCategories)
-	e.GET("/categories/:category_id", handlers.GetCategoryByID)
-	e.POST("/categories", handlers.CreateCategories)
-	e.PUT("/categories/:category_id", handlers.UpdateCategory)
-	e.DELETE("/categories/:id", handlers.DeleteCategoryByID)
-
-	e.GET("/products", handlers.GetProducts)
-	e.GET("/products/:product_id", handlers.GetProductByID)
-	e.POST("/products", handlers.AddProduct)
-	e.PUT("/products/:product_id", handlers.UpdateProduct)
-	e.DELETE("/products/:product_id", handlers.DeleteProduct)
-
-	e.GET("/sales", handlers.GetSales)
-	e.GET("/sales/:sale_id", handlers.GetSaleByID)
-	e.POST("/sales", handlers.AddSale)
-	e.DELETE("/sales/:sale_id", handlers.DeleteSale)
-	e.GET("/sales/:category_name", handlers.FetchSalesByCategory)
-	e.GET("/sales/:date", handlers.FetchSalesByDate)
-	e.GET("/sales/:user_id", handlers.FetchSalesByUserID)
-
-	e.POST("/products/:product_id/sell/:quantity_sold", handlers.SellProduct)
+	// Register routes
+	routes.RegisterRoutes(e)
 
 	// Start the server
 	port := os.Getenv("PORT")
