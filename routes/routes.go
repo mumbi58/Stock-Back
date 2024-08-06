@@ -20,15 +20,17 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/products", handlers.AddProduct)
 	e.PUT("/products/:product_id", handlers.UpdateProduct)
 	e.DELETE("/products/:product_id", handlers.DeleteProduct)
+	e.DELETE("/products/:product_id/pending-deletion", handlers.MoveProductToPendingDeletion)
+	e.PUT("/products/:product_id/recover", handlers.MoveProductFromPendingDeletion)
 
 	// Define CRUD endpoints for sales
 	e.GET("/sales", handlers.GetSales)
 	e.GET("/sales/:sale_id", handlers.GetSaleByID)
 	e.POST("/sales", handlers.AddSale)
 	e.DELETE("/sales/:sale_id", handlers.DeleteSale)
-	e.GET("/sales/:category_name", handlers.FetchSalesByCategory)
-	e.GET("/sales/:date", handlers.FetchSalesByDate)
-	e.GET("/sales/:user_id", handlers.FetchSalesByUserID)
+	e.GET("/salebycategory/:category_name", handlers.FetchSalesByCategory)
+	e.GET("/salebycategory/:date", handlers.FetchSalesByDate)
+	e.GET("/salebycategory/:user_id", handlers.FetchSalesByUserID)
 
 	// Endpoint for selling products
 	e.POST("/products/:product_id/sell/:quantity_sold", handlers.SellProduct)

@@ -11,6 +11,142 @@ import (
 	"strconv"
 )
 
+func MoveProductFromPendingDeletion(c echo.Context) error {
+	// Extract product_id from path parameter
+	productID, err := strconv.Atoi(c.Param("product_id"))
+	if err != nil {
+		log.Printf("Invalid product ID: %s", c.Param("product_id"))
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+	}
+
+	// Initialize database connection
+	db := database.InitDB()
+	defer db.Close()
+
+	// Begin a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Fetch the product from the pending_deletion_products table
+	row := tx.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM pending_deletion_products WHERE product_id = ?", productID)
+	var prod model.Product
+
+	// Scan the row into the Product struct
+	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Product not found in pending deletion with ID: %d", productID)
+			tx.Rollback() // Rollback the transaction on error
+			return echo.NewHTTPError(http.StatusNotFound, "Product not found in pending deletion")
+		}
+		log.Printf("Error scanning product row: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch product")
+	}
+
+	// Insert the product into the products table
+	_, err = tx.Exec(`
+        INSERT INTO products (product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, prod.ProductID, prod.CategoryName, prod.ProductName, prod.ProductCode, prod.ProductDescription, prod.Date, prod.Quantity, prod.ReorderLevel, prod.Price)
+	if err != nil {
+		log.Printf("Error inserting product into products table: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to move product back to products")
+	}
+
+	// Delete the product from the pending_deletion_products table
+	_, err = tx.Exec("DELETE FROM pending_deletion_products WHERE product_id = ?", productID)
+	if err != nil {
+		log.Printf("Error deleting product from pending_deletion_products: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete product from pending deletion")
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		log.Printf("Error committing transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to complete operation")
+	}
+
+	// Log the successful operation
+	log.Printf("Moved product with ID %d back to products successfully", productID)
+
+	// Return success response
+	return c.JSON(http.StatusOK, map[string]string{"message": "Product moved back to products successfully"})
+}
+
+func MoveProductToPendingDeletion(c echo.Context) error {
+	// Extract product_id from path parameter
+	productID, err := strconv.Atoi(c.Param("product_id"))
+	if err != nil {
+		log.Printf("Invalid product ID: %s", c.Param("product_id"))
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+	}
+
+	// Initialize database connection
+	db := database.InitDB()
+	defer db.Close()
+
+	// Begin a transaction
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	}
+
+	// Fetch the product from the products table
+	row := tx.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID)
+	var prod model.Product
+
+	// Scan the row into the Product struct
+	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Printf("Product not found with ID: %d", productID)
+			tx.Rollback() // Rollback the transaction on error
+			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+		}
+		log.Printf("Error scanning product row: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch product")
+	}
+
+	// Insert the product into the pending_deletion_products table
+	_, err = tx.Exec(`
+        INSERT INTO pending_deletion_products (product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, prod.ProductID, prod.CategoryName, prod.ProductName, prod.ProductCode, prod.ProductDescription, prod.Date, prod.Quantity, prod.ReorderLevel, prod.Price)
+	if err != nil {
+		log.Printf("Error inserting product into pending_deletion_products: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to move product to pending deletion")
+	}
+
+	// Delete the product from the products table
+	_, err = tx.Exec("DELETE FROM products WHERE product_id = ?", productID)
+	if err != nil {
+		log.Printf("Error deleting product: %s", err.Error())
+		tx.Rollback() // Rollback the transaction on error
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete product")
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		log.Printf("Error committing transaction: %s", err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to complete operation")
+	}
+
+	// Log the successful operation
+	log.Printf("Moved product with ID %d to pending deletion successfully", productID)
+
+	// Return success response
+	return c.JSON(http.StatusOK, map[string]string{"message": "Product moved to pending deletion successfully"})
+}
+
 func GetProducts(c echo.Context) error {
 	log.Println("Received request to fetch products")
 
