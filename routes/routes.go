@@ -24,6 +24,7 @@ func SetupRoutes(e *echo.Echo) {
     superadmin.Use(middlewares.AuthMiddleware(models.SuperAdminRoleID)) // Ensure SuperAdmin is authorized
     superadmin.POST("/addadmin", controllers.AddAdmin)
     superadmin.POST("/addorganization", controllers.SuperAdminAddOrganization)
+    superadmin.POST("/addorganizationadmin", controllers.SuperAdminAddOrganizationAdmin)
 
     // Admin routes
     adminGroup := e.Group("/admin")
@@ -40,6 +41,8 @@ func SetupRoutes(e *echo.Echo) {
     adminGroup.PUT("/user/deactivate", controllers.DeactivateUser)   
     adminGroup.GET("/users/inactive", controllers.GetInactiveUsers)   
     adminGroup.GET("/organizations/active", controllers.GetActiveOrganizations)       
-    adminGroup.GET("/organizations/inactive", controllers.GetInactiveOrganizations)  
+    adminGroup.GET("/organizations/inactive", controllers.GetInactiveOrganizations) 
+    adminGroup.PUT("/organization/:id/activate", controllers.ActivateOrganization) 
+    adminGroup.PUT("/organization/:id/deactivate", controllers.DeactivateOrganization)    
     //adminGroup.DELETE("/organization:id", controllers.AdminDeleteOrganization)
 }

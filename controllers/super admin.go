@@ -164,6 +164,78 @@ func SuperAdminAddOrganization(c echo.Context) error {
     return c.JSON(http.StatusOK, echo.Map{"message": "Organization added successfully", "organization": newOrganization})
 }
 
+func SuperAdminAddOrganizationAdmin(c echo.Context) error {
+    // Retrieve userID and roleID from context
+    userID, ok := c.Get("userID").(int)
+    if !ok {
+        log.Println("Failed to get userID from context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    roleID, ok := c.Get("roleID").(int)
+    if !ok {
+        log.Println("Failed to get roleID from context")
+        return c.JSON(http.StatusUnauthorized, echo.Map{"error": "Unauthorized"})
+    }
+
+    // Log the received userID and roleID
+    log.Printf("Received UserID: %d, RoleID: %d", userID, roleID)
+
+    // Check if the roleID is for a Super Admin (roleID = 1)
+    if roleID != models.SuperAdminRoleID {
+        log.Println("Permission denied: non-super admin trying to add organization admin")
+        return c.JSON(http.StatusForbidden, echo.Map{"error": "Permission denied"})
+    }
+
+    // Extract and validate organizationID from query parameters
+    orgIDStr := c.QueryParam("organizationID")
+    log.Printf("Received organization ID from query: %s", orgIDStr)
+    if orgIDStr == "" {
+        log.Println("Organization ID is missing from the request")
+        return c.JSON(http.StatusBadRequest, echo.Map{"error": "Organization ID is required"})
+    }
+
+    orgID, err := strconv.ParseUint(orgIDStr, 10, 64)
+    if err != nil {
+        log.Printf("Error parsing organization ID: %v", err)
+        return c.JSON(http.StatusBadRequest, echo.Map{"error": "Invalid organization ID"})
+    }
+
+    // Check if the organization exists in the database
+    var orgCount int64
+    if err := db.GetDB().Model(&models.Organization{}).Where("id = ?", orgID).Count(&orgCount).Error; err != nil {
+        log.Printf("Error querying organization: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": "Error querying organization"})
+    }
+
+    if orgCount == 0 {
+        log.Println("Organization ID does not exist")
+        return c.JSON(http.StatusNotFound, echo.Map{"error": "Organization ID not found"})
+    }
+
+    // Bind request body to newUser
+    var newUser models.User
+    if err := c.Bind(&newUser); err != nil {
+        log.Printf("Bind error: %v", err)
+        return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+    }
+
+    newUser.RoleID = models.OrganizationAdminRoleID
+    newUser.OrganizationID = uint(orgID)
+    newUser.CreatedBy = uint(userID) // Set who created this user
+
+    // Create new user in the database
+    if err := db.GetDB().Create(&newUser).Error; err != nil {
+        log.Printf("Create error: %v", err)
+        return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+    }
+
+    log.Println("Organization admin added successfully")
+    return c.JSON(http.StatusOK, echo.Map{"message": "Organization admin added successfully", "user": newUser})
+}
+
+ 
+
 /*func SoftDeleteOrganization(c echo.Context) error {
     id := c.Param("id")
     log.Printf("SoftDeleteOrganization called with ID: %s", id)
@@ -497,36 +569,60 @@ func GetAllOrganizations(c echo.Context) error {
 // ActivateOrganization activates an organization
 func ActivateOrganization(c echo.Context) error {
     orgID := c.Param("id")
+    log.Printf("Activating organization with ID: %s", orgID) // Log the incoming request
+
     var org models.Organization
 
+    // Try to find the organization
     if err := db.GetDB().First(&org, orgID).Error; err != nil {
+        log.Printf("Organization not found with ID: %s. Error: %v", orgID, err)
         return c.JSON(http.StatusNotFound, map[string]string{"message": "Organization not found"})
     }
 
+    // Log current status before activation
+    log.Printf("Current status of organization ID %s: IsActive=%v", orgID, org.IsActive)
+
     org.IsActive = true
+    // Try to save the updated organization
     if err := db.GetDB().Save(&org).Error; err != nil {
+        log.Printf("Error saving organization ID %s. Error: %v", orgID, err)
         return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving organization"})
     }
 
+    // Log success and updated status
+    log.Printf("Successfully activated organization ID %s. Updated status: IsActive=%v", orgID, org.IsActive)
     return c.JSON(http.StatusOK, org)
 }
 
 // DeactivateOrganization deactivates an organization
 func DeactivateOrganization(c echo.Context) error {
     orgID := c.Param("id")
+    log.Printf("Deactivating organization with ID: %s", orgID) // Log the incoming request
+
     var org models.Organization
 
+    // Try to find the organization
     if err := db.GetDB().First(&org, orgID).Error; err != nil {
+        log.Printf("Organization not found with ID: %s. Error: %v", orgID, err)
         return c.JSON(http.StatusNotFound, map[string]string{"message": "Organization not found"})
     }
 
+    // Log current status before deactivation
+    log.Printf("Current status of organization ID %s: IsActive=%v", orgID, org.IsActive)
+
     org.IsActive = false
+    // Try to save the updated organization
     if err := db.GetDB().Save(&org).Error; err != nil {
+        log.Printf("Error saving organization ID %s. Error: %v", orgID, err)
         return c.JSON(http.StatusInternalServerError, map[string]string{"message": "Error saving organization"})
     }
 
+    // Log success and updated status
+    log.Printf("Successfully deactivated organization ID %s. Updated status: IsActive=%v", orgID, org.IsActive)
     return c.JSON(http.StatusOK, org)
 }
+
+
 
 func GetActiveUsers(c echo.Context) error {
     var users []models.User
