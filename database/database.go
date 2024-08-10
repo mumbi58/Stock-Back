@@ -1,28 +1,57 @@
 package database
 
 import (
-	"database/sql"
 	"fmt"
+	"github.com/joho/godotenv"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"log"
 	"os"
-
-	_ "github.com/go-sql-driver/mysql" // Assuming you're using MySQL
 )
 
-func InitDB() *sql.DB {
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+var db *gorm.DB
 
-	// Build connection string
-	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
-		dbUser, dbPassword, dbHost, dbPort, dbName)
-
-	db, err := sql.Open("mysql", connStr)
-	if err != nil {
-		panic(err)
+// Init initializes the database connection and migrates models
+func Init() {
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
 	}
 
+	// Get database connection details from environment variables
+	dbUser := os.Getenv("DB_USER")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	dbHost := os.Getenv("DB_HOST")
+	dbPort := os.Getenv("DB_PORT")
+	dbName := os.Getenv("DB_NAME")
+
+	// Create the DSN (Data Source Name) for connecting to the database
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", dbUser, dbPassword, dbHost, dbPort, dbName)
+
+	// Open a connection to the database
+	conn, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	db = conn
+
+	// Auto migrate the models
+	// Replace these with your actual model types
+	if err := db.AutoMigrate( /* &models.User{}, &models.Organization{} */ ); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// Seed initial data if needed
+	seedInitialData()
+}
+
+// GetDB returns the database connection instance
+func GetDB() *gorm.DB {
 	return db
+}
+
+// Seed initial data if needed
+func seedInitialData() {
+	// Implement this function to seed initial data
 }

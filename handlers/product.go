@@ -2,382 +2,232 @@ package handlers
 
 import (
 	"awesomeProject9/database"
-	model "awesomeProject9/models"
-	"database/sql"
+	models "awesomeProject9/models"
 	"encoding/json"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 	"log"
 	"net/http"
 	"strconv"
 )
 
+import (
+	"time"
+)
+
+// Convert the ISO 8601 date to TIMESTAMP format
+func convertToTimestampFormat(isoDate string) (string, error) {
+	// Parse the ISO 8601 date
+	t, err := time.Parse(time.RFC3339, isoDate)
+	if err != nil {
+		return "", err
+	}
+	// Format the time to 'YYYY-MM-DD HH:MM:SS'
+	return t.Format("2006-01-02 15:04:05"), nil
+}
+
+// Get the database instance
+func getDB() *gorm.DB {
+	db := database.GetDB()
+	if db == nil {
+		log.Println("Failed to get database instance")
+	}
+	return db
+}
+
+// Utility function for error responses
+func errorResponse(c echo.Context, statusCode int, message string) error {
+	log.Println(message)
+	return echo.NewHTTPError(statusCode, message)
+}
+
+// MoveProductFromPendingDeletion handles moving a product from pending deletion to active products
 func MoveProductFromPendingDeletion(c echo.Context) error {
-	// Extract product_id from path parameter
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
-		log.Printf("Invalid product ID: %s", c.Param("product_id"))
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+		return errorResponse(c, http.StatusBadRequest, "Invalid product ID")
 	}
 
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
-
-	// Begin a transaction
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("Error starting transaction: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
 	}
 
-	// Fetch the product from the pending_deletion_products table
-	row := tx.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM pending_deletion_products WHERE product_id = ?", productID)
-	var prod model.Product
+	tx := db.Begin()
+	if tx.Error != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Error starting transaction")
+	}
+	defer tx.Rollback()
 
-	// Scan the row into the Product struct
-	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Printf("Product not found in pending deletion with ID: %d", productID)
-			tx.Rollback() // Rollback the transaction on error
-			return echo.NewHTTPError(http.StatusNotFound, "Product not found in pending deletion")
+	var prod models.Product
+	if err := tx.Table("pending_deletion_products").Where("product_id = ?", productID).First(&prod).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errorResponse(c, http.StatusNotFound, "Product not found in pending deletion")
 		}
-		log.Printf("Error scanning product row: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch product")
+		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch product")
 	}
 
-	// Insert the product into the products table
-	_, err = tx.Exec(`
-        INSERT INTO products (product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, prod.ProductID, prod.CategoryName, prod.ProductName, prod.ProductCode, prod.ProductDescription, prod.Date, prod.Quantity, prod.ReorderLevel, prod.Price)
-	if err != nil {
-		log.Printf("Error inserting product into products table: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to move product back to products")
+	if err := tx.Table("products").Create(&prod).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to move product back to products")
 	}
 
-	// Delete the product from the pending_deletion_products table
-	_, err = tx.Exec("DELETE FROM pending_deletion_products WHERE product_id = ?", productID)
-	if err != nil {
-		log.Printf("Error deleting product from pending_deletion_products: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete product from pending deletion")
+	if err := tx.Table("pending_deletion_products").Where("product_id = ?", productID).Delete(&models.Product{}).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to delete product from pending deletion")
 	}
 
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		log.Printf("Error committing transaction: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to complete operation")
+	if err := tx.Commit().Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to complete operation")
 	}
 
-	// Log the successful operation
-	log.Printf("Moved product with ID %d back to products successfully", productID)
-
-	// Return success response
 	return c.JSON(http.StatusOK, map[string]string{"message": "Product moved back to products successfully"})
 }
 
+// MoveProductToPendingDeletion handles moving a product to pending deletion
 func MoveProductToPendingDeletion(c echo.Context) error {
-	// Extract product_id from path parameter
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
-		log.Printf("Invalid product ID: %s", c.Param("product_id"))
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+		return errorResponse(c, http.StatusBadRequest, "Invalid product ID")
 	}
 
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
-
-	// Begin a transaction
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("Error starting transaction: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
 	}
 
-	// Fetch the product from the products table
-	row := tx.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID)
-	var prod model.Product
+	tx := db.Begin()
+	if tx.Error != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Error starting transaction")
+	}
+	defer tx.Rollback()
 
-	// Scan the row into the Product struct
-	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			log.Printf("Product not found with ID: %d", productID)
-			tx.Rollback() // Rollback the transaction on error
-			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+	var prod models.Product
+	if err := tx.Table("products").Where("product_id = ?", productID).First(&prod).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errorResponse(c, http.StatusNotFound, "Product not found")
 		}
-		log.Printf("Error scanning product row: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch product")
+		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch product")
 	}
 
-	// Insert the product into the pending_deletion_products table
-	_, err = tx.Exec(`
-        INSERT INTO pending_deletion_products (product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, prod.ProductID, prod.CategoryName, prod.ProductName, prod.ProductCode, prod.ProductDescription, prod.Date, prod.Quantity, prod.ReorderLevel, prod.Price)
-	if err != nil {
-		log.Printf("Error inserting product into pending_deletion_products: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to move product to pending deletion")
+	if err := tx.Table("pending_deletion_products").Create(&prod).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to move product to pending deletion")
 	}
 
-	// Delete the product from the products table
-	_, err = tx.Exec("DELETE FROM products WHERE product_id = ?", productID)
-	if err != nil {
-		log.Printf("Error deleting product: %s", err.Error())
-		tx.Rollback() // Rollback the transaction on error
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to delete product")
+	if err := tx.Table("products").Where("product_id = ?", productID).Delete(&models.Product{}).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to delete product")
 	}
 
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		log.Printf("Error committing transaction: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to complete operation")
+	if err := tx.Commit().Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to complete operation")
 	}
 
-	// Log the successful operation
-	log.Printf("Moved product with ID %d to pending deletion successfully", productID)
-
-	// Return success response
 	return c.JSON(http.StatusOK, map[string]string{"message": "Product moved to pending deletion successfully"})
 }
 
+// GetProducts fetches all products
 func GetProducts(c echo.Context) error {
-	log.Println("Received request to fetch products")
-
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
-
-	// Query all products from the products table, including product_description
-	rows, err := db.Query("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products")
-	if err != nil {
-		log.Printf("Error querying products from database: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
-	}
-	defer rows.Close()
-
-	// Slice to hold the fetched products
-	var products []model.Product
-
-	// Iterate over the query results
-	for rows.Next() {
-		var prod model.Product
-
-		// Scan each row into the Product struct
-		err := rows.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
-		if err != nil {
-			// Check if the error is due to NULL value in reorder_level or price
-			if err.Error() == "sql: Scan error on column index 7, name \"reorder_level\": converting NULL to int is unsupported" {
-				// Handle NULL value scenario for reorder_level
-				log.Printf("Null value encountered in reorder_level column")
-				prod.ReorderLevel = 0 // Or set it to any default value as per your application logic
-			} else if err.Error() == "sql: Scan error on column index 8, name \"price\": converting NULL to float64 is unsupported" {
-				// Handle NULL value scenario for price
-				log.Printf("Null value encountered in price column")
-				prod.Price = 0.0 // Or set it to any default value as per your application logic
-			} else {
-				log.Printf("Error scanning product row: %s", err.Error())
-				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
-			}
-		}
-		// Append the Product to the slice
-		products = append(products, prod)
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
 	}
 
-	// Check for errors during iteration
-	if err := rows.Err(); err != nil {
-		log.Printf("Error iterating over product rows: %s", err.Error())
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal Server Error"})
+	var products []models.Product
+	if err := db.Table("products").Find(&products).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch products")
 	}
-	// Log the number of Products fetched
-	log.Printf("Fetched %d products", len(products))
 
-	// Return the fetched Products as JSON
 	return c.JSON(http.StatusOK, products)
 }
 
-// GetProductByID fetches a single product by its ID from the database.
+// GetProductByID fetches a product by its ID
 func GetProductByID(c echo.Context) error {
-	log.Println("Received request to fetch product by ID")
-
-	// Extract product_id from path parameter
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
-		log.Printf("Invalid product ID: %s", c.Param("product_id"))
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+		return errorResponse(c, http.StatusBadRequest, "Invalid product ID")
 	}
 
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
+	}
 
-	// Query the product by product_id, including product_description
-	row := db.QueryRow("SELECT product_id, category_name, product_name, product_code, product_description, date, quantity, reorder_level, price FROM products WHERE product_id = ?", productID)
-	var prod model.Product
-
-	// Scan the row into the Product struct
-	err = row.Scan(&prod.ProductID, &prod.CategoryName, &prod.ProductName, &prod.ProductCode, &prod.ProductDescription, &prod.Date, &prod.Quantity, &prod.ReorderLevel, &prod.Price)
-	if err != nil {
-		// Check if the error is due to a "not found" condition
-		if err == sql.ErrNoRows {
-			log.Printf("Product not found with ID: %d", productID)
-			return echo.NewHTTPError(http.StatusNotFound, "Product not found")
+	var prod models.Product
+	if err := db.Table("products").Where("product_id = ?", productID).First(&prod).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return errorResponse(c, http.StatusNotFound, "Product not found")
 		}
-
-		// Handle other scanning errors
-		log.Printf("Error scanning product row: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch product")
+		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch product")
 	}
 
-	// Log the fetched product
-	log.Printf("Fetched product: %+v", prod)
-
-	// Return the fetched Product as JSON
 	return c.JSON(http.StatusOK, prod)
 }
 func AddProduct(c echo.Context) error {
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
+	}
 
-	// Parse JSON manually from request body into Product struct
-	var product model.Product
+	var product models.Product
 	if err := json.NewDecoder(c.Request().Body).Decode(&product); err != nil {
-		log.Printf("Error decoding JSON: %s", err.Error())
-		return echo.NewHTTPError(http.StatusBadRequest, "Error decoding JSON")
+		return errorResponse(c, http.StatusBadRequest, "Error decoding JSON")
 	}
 
-	// Log the received product details
-	log.Printf("Received request to create a product: %+v", product)
-
-	// Execute the SQL INSERT query to add the product to the database, including product_description
-	result, err := db.Exec(`
-        INSERT INTO products (category_name, product_name, product_code, product_description, date, quantity, reorder_level, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, product.CategoryName, product.ProductName, product.ProductCode, product.ProductDescription, product.Date, product.Quantity, product.ReorderLevel, product.Price)
+	// Assuming `product.Date` is in ISO 8601 format and needs conversion
+	formattedDate, err := convertToTimestampFormat(product.Date)
 	if err != nil {
-		log.Printf("Error inserting product: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error inserting product")
+		return errorResponse(c, http.StatusBadRequest, "Invalid date format")
+	}
+	product.Date = formattedDate
+
+	if err := db.Table("products").Create(&product).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Error inserting product")
 	}
 
-	// Get the ID of the newly inserted product
-	productID, err := result.LastInsertId()
-	if err != nil {
-		log.Printf("Error getting product ID: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error getting product ID")
-	}
-	product.ProductID = int(productID)
-
-	// Log the successful creation and the product details
-	log.Printf("Product created successfully. Product ID: %d, Category: %s, Name: %s, Code: %s, Description: %s, Date: %s, Quantity: %d, Reorder Level: %d, Price: %.2f",
-		product.ProductID, product.CategoryName, product.ProductName, product.ProductCode, product.ProductDescription, product.Date, product.Quantity, product.ReorderLevel, product.Price)
-
-	// Return the created product as JSON with status 201 Created
 	return c.JSON(http.StatusCreated, product)
 }
 
+// UpdateProduct updates an existing product
 func UpdateProduct(c echo.Context) error {
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
+	}
 
-	// Extract product_id from path parameter
 	productID := c.Param("product_id")
-	log.Printf("Received request to update product with ID: %s", productID)
-
-	// Bind the request payload to a new Product struct
-	var updatedProduct model.Product
+	var updatedProduct models.Product
 	if err := c.Bind(&updatedProduct); err != nil {
-		log.Printf("Error binding payload: %s", err.Error())
-		return echo.NewHTTPError(http.StatusBadRequest, "Failed to parse request body")
+		return errorResponse(c, http.StatusBadRequest, "Failed to parse request body")
 	}
 
-	// Execute the SQL UPDATE query to update the product in the database, including product_description
-	query := `
-        UPDATE products 
-        SET category_name = ?, 
-            product_name = ?, 
-            product_code = ?, 
-            product_description = ?, 
-            date = ?, 
-            quantity = ?, 
-            reorder_level = ?, 
-            price = ?
-        WHERE product_id = ?
-    `
-	_, err := db.Exec(query,
-		updatedProduct.CategoryName,
-		updatedProduct.ProductName,
-		updatedProduct.ProductCode,
-		updatedProduct.ProductDescription, // Added this line
-		updatedProduct.Date,
-		updatedProduct.Quantity,
-		updatedProduct.ReorderLevel,
-		updatedProduct.Price,
-		productID,
-	)
+	// Convert the ISO 8601 date format to MySQL TIMESTAMP format
+	formattedDate, err := convertToTimestampFormat(updatedProduct.Date)
 	if err != nil {
-		log.Printf("Error updating product with ID %s: %s", productID, err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update product")
+		return errorResponse(c, http.StatusBadRequest, "Invalid date format")
+	}
+	updatedProduct.Date = formattedDate
+
+	// Update the product in the database
+	if err := db.Table("products").Where("product_id = ?", productID).Updates(updatedProduct).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to update product")
 	}
 
-	// Log successful update
-	log.Printf("Product with ID %s updated successfully", productID)
-
-	// Return success message
 	return c.JSON(http.StatusOK, map[string]string{"message": "Product updated successfully"})
 }
 
-// DeleteProduct deletes a product from the database by its ID.
+// DeleteProduct deletes a product by ID
 func DeleteProduct(c echo.Context) error {
-	// Extract product_id from request parameters
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
-		log.Printf("Invalid product ID: %s", c.Param("product_id"))
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid product ID")
+		return errorResponse(c, http.StatusBadRequest, "Invalid product ID")
 	}
 
-	// Initialize database connection
-	db := database.InitDB()
-	defer db.Close()
-
-	// Prepare statement to delete a product
-	query := "DELETE FROM products WHERE product_id = ?"
-	stmt, err := db.Prepare(query)
-	if err != nil {
-		log.Printf("Error preparing delete statement: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
-	}
-	defer stmt.Close()
-
-	// Execute the delete operation
-	result, err := stmt.Exec(productID)
-	if err != nil {
-		log.Printf("Error deleting product: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	db := getDB()
+	if db == nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to connect to the database")
 	}
 
-	// Check the number of rows affected
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Printf("Error getting rows affected: %s", err.Error())
-		return echo.NewHTTPError(http.StatusInternalServerError, "Internal Server Error")
+	if err := db.Table("products").Where("product_id = ?", productID).Delete(&models.Product{}).Error; err != nil {
+		return errorResponse(c, http.StatusInternalServerError, "Failed to delete product")
 	}
 
-	// Check if any rows were affected
-	if rowsAffected == 0 {
-		log.Printf("Product with ID %d not found", productID)
-		return echo.NewHTTPError(http.StatusNotFound, "Product not found")
-	}
-	// Log successful deletion
-	log.Printf("Deleted product with ID %d", productID)
-
-	// Return success response
 	return c.JSON(http.StatusOK, map[string]string{"message": "Product deleted successfully"})
 }

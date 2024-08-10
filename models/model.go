@@ -23,12 +23,13 @@ type Product struct {
 }
 
 type Sale struct {
-	SaleID   int       `json:"sale_id"`
-	Name     string    `json:"name"`
-	Price    float64   `json:"price"`
-	Quantity int       `json:"quantity"`
-	UserID   string    `json:"user_id"`
-	Date     time.Time `json:"date"`
+	SaleID       int       `json:"sale_id"`
+	Name         string    `json:"name"`
+	Price        float64   `json:"price"`
+	Quantity     int       `json:"quantity"`
+	UserID       string    `json:"user_id"`
+	Date         time.Time `json:"date"`
+	CategoryName string    `json:"category_name"`
 }
 
 type SaleByCategory struct {
