@@ -40,8 +40,6 @@ func errorResponse(c echo.Context, statusCode int, message string) error {
 	log.Println(message)
 	return echo.NewHTTPError(statusCode, message)
 }
-
-// MoveProductFromPendingDeletion handles moving a product from pending deletion to active products
 func MoveProductFromPendingDeletion(c echo.Context) error {
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
@@ -67,6 +65,13 @@ func MoveProductFromPendingDeletion(c echo.Context) error {
 		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch product")
 	}
 
+	// Convert date to TIMESTAMP format
+	formattedDate, err := convertToTimestampFormat(prod.Date)
+	if err != nil {
+		return errorResponse(c, http.StatusBadRequest, "Invalid date format")
+	}
+	prod.Date = formattedDate
+
 	if err := tx.Table("products").Create(&prod).Error; err != nil {
 		return errorResponse(c, http.StatusInternalServerError, "Failed to move product back to products")
 	}
@@ -81,8 +86,6 @@ func MoveProductFromPendingDeletion(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Product moved back to products successfully"})
 }
-
-// MoveProductToPendingDeletion handles moving a product to pending deletion
 func MoveProductToPendingDeletion(c echo.Context) error {
 	productID, err := strconv.Atoi(c.Param("product_id"))
 	if err != nil {
@@ -107,6 +110,13 @@ func MoveProductToPendingDeletion(c echo.Context) error {
 		}
 		return errorResponse(c, http.StatusInternalServerError, "Failed to fetch product")
 	}
+
+	// Convert date to TIMESTAMP format
+	formattedDate, err := convertToTimestampFormat(prod.Date)
+	if err != nil {
+		return errorResponse(c, http.StatusBadRequest, "Invalid date format")
+	}
+	prod.Date = formattedDate
 
 	if err := tx.Table("pending_deletion_products").Create(&prod).Error; err != nil {
 		return errorResponse(c, http.StatusInternalServerError, "Failed to move product to pending deletion")
